@@ -5,12 +5,20 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { mockDb } from '../../data/mockDb';
 
+const TOKEN_WINDOW_MS = 10 * 60 * 1000;
+
+function isTokenValid(token: string): boolean {
+    const now = Date.now();
+    const current = Math.floor(now / TOKEN_WINDOW_MS);
+    const t = parseInt(token, 10);
+    // Accepte la fenêtre actuelle et la précédente (tolérance de ±10 min à cheval entre 2 fenêtres)
+    return t === current || t === current - 1;
+}
+
 export default function ScannerScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const [permission, requestPermission] = useCameraPermissions();
-
-    // États du scan : null (en attente), 'valid' ou 'invalid'
     const [scanResult, setScanResult] = useState<'valid' | 'invalid' | null>(null);
     const [scannedUser, setScannedUser] = useState<any>(null);
 
@@ -27,24 +35,32 @@ export default function ScannerScreen() {
     }
 
     const handleBarcodeScanned = ({ data }: { data: string }) => {
-        if (scanResult) return; // Évite les scans multiples en boucle
+        if (scanResult) return;
 
-        // Recherche de l'ID du QR code scanné dans notre liste d'utilisateurs
-        const user = mockDb.users.find(u => u.id === data);
+        // Format attendu : "WK-XXXXX|TOKEN" (nouveau) ou "WK-XXXXX" (ancien, toujours accepté)
+        const pipeIdx = data.lastIndexOf('|');
+        const userId = pipeIdx > 0 ? data.slice(0, pipeIdx) : data;
+        const token = pipeIdx > 0 ? data.slice(pipeIdx + 1) : null;
 
+        // Vérification du token temporel si présent
+        if (token !== null && !isTokenValid(token)) {
+            setScannedUser({ name: 'QR Code', id: userId, status: 'QR Code Expiré — Demandez au client de rafraîchir son app' });
+            setScanResult('invalid');
+            return;
+        }
+
+        const user = mockDb.users.find(u => u.id === userId);
         if (user) {
             setScannedUser(user);
             setScanResult(user.valid ? 'valid' : 'invalid');
         } else {
-            // Si l'ID scanné n'existe pas du tout
-            setScannedUser({ name: "Inconnu", id: data });
+            setScannedUser({ name: 'Inconnu', id: userId, status: 'Carte Inconnue' });
             setScanResult('invalid');
         }
     };
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
-            {/* En-tête de navigation */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/')}>
                     <Text style={styles.backBtnText}>← Retour</Text>
@@ -54,7 +70,6 @@ export default function ScannerScreen() {
             </View>
 
             {scanResult === null ? (
-                // ================= ÉTAT 1 : EN ATTENTE DE SCAN =================
                 <View style={styles.cameraContainer}>
                     <CameraView style={StyleSheet.absoluteFillObject} facing="back" onBarcodeScanned={handleBarcodeScanned}>
                         <View style={styles.overlay}>
@@ -65,18 +80,36 @@ export default function ScannerScreen() {
                                 <View style={[styles.corner, styles.bl]} />
                                 <View style={[styles.corner, styles.br]} />
                             </View>
+                            <View style={styles.simulateBtns}>
+                                <TouchableOpacity
+                                    style={[styles.simulateBtn, { borderColor: '#22c55e' }]}
+                                    onPress={() => handleBarcodeScanned({ data: `WK-84930|${Math.floor(Date.now() / TOKEN_WINDOW_MS)}` })}
+                                >
+                                    <Text style={styles.simulateBtnText}>✅ Valide</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.simulateBtn, { borderColor: '#EF4444' }]}
+                                    onPress={() => handleBarcodeScanned({ data: `WK-99999|${Math.floor(Date.now() / TOKEN_WINDOW_MS)}` })}
+                                >
+                                    <Text style={styles.simulateBtnText}>❌ Invalide</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.simulateBtn, { borderColor: '#F59E0B' }]}
+                                    onPress={() => handleBarcodeScanned({ data: `WK-84930|${Math.floor(Date.now() / TOKEN_WINDOW_MS) - 5}` })}
+                                >
+                                    <Text style={styles.simulateBtnText}>⏱ Expiré</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </CameraView>
                 </View>
             ) : scanResult === 'valid' ? (
-                // ================= ÉTAT 2 : CARTE VALIDE (ÉCRAN VERT) =================
                 <View style={styles.resultContainer}>
                     <View style={styles.successCard}>
                         <View style={styles.checkIcon}>
                             <Text style={{ fontSize: 40 }}>✅</Text>
                         </View>
                         <Text style={styles.successTitle}>CARTE VALIDE</Text>
-
                         <View style={styles.userInfo}>
                             <View style={styles.successAvatar}>
                                 <Text style={styles.successAvatarText}>{scannedUser?.name[0]}</Text>
@@ -84,21 +117,18 @@ export default function ScannerScreen() {
                             <Text style={styles.successName}>{scannedUser?.name}</Text>
                             <Text style={styles.successId}>N° {scannedUser?.id}</Text>
                         </View>
-
                         <TouchableOpacity style={styles.newScanBtn} onPress={() => setScanResult(null)}>
                             <Text style={styles.newScanBtnText}>Nouveau scan</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             ) : (
-                // ================= ÉTAT 3 : CARTE INVALIDÉE (ÉCRAN ROUGE/GRIS) =================
                 <View style={styles.resultContainer}>
                     <View style={[styles.successCard, { borderColor: '#EF4444', borderWidth: 2 }]}>
                         <View style={[styles.checkIcon, { backgroundColor: '#fee2e2' }]}>
                             <Text style={{ fontSize: 40 }}>❌</Text>
                         </View>
                         <Text style={[styles.successTitle, { color: '#EF4444' }]}>CARTE INVALIDE</Text>
-
                         <View style={styles.userInfo}>
                             <View style={[styles.successAvatar, { backgroundColor: '#A0998F' }]}>
                                 <Text style={styles.successAvatarText}>{scannedUser?.name[0]}</Text>
@@ -109,7 +139,6 @@ export default function ScannerScreen() {
                             </Text>
                             <Text style={styles.successId}>N° {scannedUser?.id}</Text>
                         </View>
-
                         <TouchableOpacity style={[styles.newScanBtn, { backgroundColor: '#0D0D0D' }]} onPress={() => setScanResult(null)}>
                             <Text style={styles.newScanBtnText}>Réessayer</Text>
                         </TouchableOpacity>
@@ -152,5 +181,9 @@ const styles = StyleSheet.create({
     successId: { fontSize: 14, color: '#A0998F', fontWeight: '500' },
 
     newScanBtn: { backgroundColor: '#FF4F30', paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16, width: '100%', alignItems: 'center' },
-    newScanBtnText: { color: 'white', fontSize: 16, fontWeight: '700' }
+    newScanBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
+
+    simulateBtns: { marginTop: 40, flexDirection: 'row', gap: 10 },
+    simulateBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
+    simulateBtnText: { color: 'white', fontSize: 13, fontWeight: '600' },
 });

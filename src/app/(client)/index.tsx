@@ -1,19 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { mockDb } from '../../data/mockDb';
 
+// Fenêtre de 10 minutes — le QR change à chaque rotation
+const TOKEN_WINDOW_MS = 10 * 60 * 1000;
+
+function getCurrentToken(): string {
+    return String(Math.floor(Date.now() / TOKEN_WINDOW_MS));
+}
+
 export default function ClientCardScreen() {
     const insets = useSafeAreaInsets();
-    const [currentUser, setCurrentUser] = useState(mockDb.users[0]); // Sophie par défaut
+    const [currentUser, setCurrentUser] = useState(mockDb.users[0]);
     const [showSwitch, setShowSwitch] = useState(false);
+    const [token, setToken] = useState(getCurrentToken);
+    const [secondsLeft, setSecondsLeft] = useState(0);
+
+    useEffect(() => {
+        const tick = () => {
+            const now = Date.now();
+            setToken(String(Math.floor(now / TOKEN_WINDOW_MS)));
+            setSecondsLeft(Math.ceil((TOKEN_WINDOW_MS - (now % TOKEN_WINDOW_MS)) / 1000));
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    const minutes = Math.floor(secondsLeft / 60);
+    const seconds = secondsLeft % 60;
+    const qrValue = `${currentUser.id}|${token}`;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.content}>
 
-                {/* En-tête : Bonjour + Bouton Profil */}
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.greetingSub}>Compte Client 👋</Text>
@@ -24,7 +47,6 @@ export default function ClientCardScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Sélecteur de profil à la volée pour le POC */}
                 {showSwitch && (
                     <View style={styles.switchContainer}>
                         <Text style={styles.switchTitle}>Choisir le profil à tester :</Text>
@@ -33,10 +55,7 @@ export default function ClientCardScreen() {
                                 <TouchableOpacity
                                     key={u.id}
                                     style={[styles.switchBtn, currentUser.id === u.id && styles.switchBtnActive]}
-                                    onPress={() => {
-                                        setCurrentUser(u);
-                                        setShowSwitch(false);
-                                    }}
+                                    onPress={() => { setCurrentUser(u); setShowSwitch(false); }}
                                 >
                                     <Text style={[styles.switchBtnText, currentUser.id === u.id && styles.switchBtnTextActive]}>
                                         {u.name} ({u.valid ? 'Valide' : 'Invalide'})
@@ -47,29 +66,32 @@ export default function ClientCardScreen() {
                     </View>
                 )}
 
-                {/* La Carte Virtuelle Wiikard */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <View>
                             <Text style={styles.cardSubtitle}>CARTE MEMBRE</Text>
                             <Text style={styles.cardTitle}>Wiikard</Text>
                         </View>
-
-                        {/* Badge Dynamique selon le statut (Rouge si actif, Gris si expiré) */}
                         <View style={[styles.activeBadge, { backgroundColor: currentUser.valid ? '#FF4F30' : '#4A4A4A' }]}>
                             <View style={[styles.activeDot, { backgroundColor: currentUser.valid ? 'white' : '#A0998F' }]} />
                             <Text style={styles.activeText}>{currentUser.valid ? 'Actif' : 'Expiré'}</Text>
                         </View>
                     </View>
 
-                    {/* Le QR Code contient l'identifiant (ID) unique de l'utilisateur choisi */}
                     <View style={styles.qrWrapper}>
                         <View style={styles.qrContainer}>
-                            <QRCode value={currentUser.id} size={160} backgroundColor="white" color="#0D0D0D" />
+                            <QRCode value={qrValue} size={160} backgroundColor="white" color="#0D0D0D" />
                         </View>
                     </View>
 
                     <Text style={styles.memberId}>{currentUser.id.split('-').join(' - ')}</Text>
+
+                    {/* Compte à rebours de rotation du QR */}
+                    <View style={styles.tokenBadge}>
+                        <Text style={styles.tokenText}>
+                            🔄 Renouvellement dans {minutes}:{String(seconds).padStart(2, '0')}
+                        </Text>
+                    </View>
                 </View>
 
             </View>
@@ -106,5 +128,8 @@ const styles = StyleSheet.create({
 
     qrWrapper: { alignItems: 'center', marginBottom: 20 },
     qrContainer: { backgroundColor: 'white', padding: 16, borderRadius: 16 },
-    memberId: { textAlign: 'center', color: '#A0998F', fontSize: 14, letterSpacing: 3, fontWeight: '500' }
+    memberId: { textAlign: 'center', color: '#A0998F', fontSize: 14, letterSpacing: 3, fontWeight: '500', marginBottom: 16 },
+
+    tokenBadge: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' },
+    tokenText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '500' },
 });

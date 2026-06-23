@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wiikard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #E8E6E1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .phone-shell {
+      width: 390px;
+      height: 844px;
+      background: #F9F8F6;
+      border-radius: 48px;
+      overflow: hidden;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.08),
+        0 40px 80px rgba(0,0,0,0.28),
+        0 16px 32px rgba(0,0,0,0.12);
+    }
+
+    /* Status bar */
+    .status-bar {
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      background: #F9F8F6;
+      position: relative;
+      z-index: 10;
+    }
+    .status-time { font-size: 15px; font-weight: 600; color: #0D0D0D; letter-spacing: -0.3px; }
+    .status-icons { display: flex; align-items: center; gap: 6px; }
+
+    /* Screen area */
+    .screen-area {
+      position: absolute;
+      top: 50px;
+      left: 0; right: 0;
+      bottom: 84px;
+      overflow: hidden;
+    }
+
+    /* Tab slide transitions */
+    .tab-screen {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: #F9F8F6;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.28s cubic-bezier(0.4,0,0.2,1), transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      pointer-events: none;
+    }
+    .tab-screen.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: all;
+    }
+    .tab-screen::-webkit-scrollbar { display: none; }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 84px;
+      background: rgba(249,248,246,0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(0,0,0,0.07);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-around;
+      padding: 10px 8px 0;
+      z-index: 20;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 4px 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-icon-wrap {
+      width: 44px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      transition: background 0.2s;
+    }
+    .nav-item.active .nav-icon-wrap {
+      background: rgba(255,79,48,0.1);
+    }
+    .nav-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: #A0998F;
+      letter-spacing: 0.1px;
+      transition: color 0.2s;
+    }
+    .nav-item.active .nav-label { color: #FF4F30; }
+
+    /* Wiikard virtual card */
+    .wii-card {
+      background: #0D0D0D;
+      border-radius: 24px;
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.22), 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .wii-card::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: rgba(255,79,48,0.12);
+      pointer-events: none;
+    }
+    .wii-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40px; left: -20px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(255,79,48,0.07);
+      pointer-events: none;
+    }
+
+    /* QR Code SVG */
+    .qr-container {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Chips filter */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chip.active { background: #FF4F30; color: white; }
+    .chip.inactive { background: #ECEAE5; color: #6B645C; }
+
+    /* Partner card */
+    .partner-card {
+      background: white;
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .partner-card:active { transform: scale(0.98); box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+
+    /* History row */
+    .hist-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid #F0EEE9;
+    }
+    .hist-row:last-child { border-bottom: none; }
+
+    /* Settings row */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .settings-row:hover { background: rgba(0,0,0,0.02); }
+    .settings-row:active { background: rgba(0,0,0,0.04); }
+
+    /* Ripple press animation */
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .count-anim { animation: countUp 0.5s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+    /* Map grid pattern */
+    .map-bg {
+      background-color: #E8E6E0;
+      background-image:
+        linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── tiny QR SVG (hand-coded pattern for visual authenticity) ── */
+function QRCode({ size = 130 }) {
+  const m = [
+    [1,1,1,1,1,1,1,0,0,1,0,1,0,0,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,1,0,1,0,1,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,0,0,1,1,0,0,0,1,0,1,1,1,0,1],
+    [1,0,1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,1,1,0,1],
+    [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+    [0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0],
+    [1,1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,1,0,1,0],
+    [0,1,0,0,1,0,0,0,1,0,1,1,0,0,1,1,0,0,1,0,1],
+    [1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,1,0,0,1,0],
+    [0,1,1,0,0,1,0,1,0,0,1,0,0,1,0,0,1,1,0,1,1],
+    [1,0,0,1,1,0,1,1,0,1,0,1,1,0,1,0,0,0,1,0,1],
+    [0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,1,0,1,0,1,0],
+    [1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1],
+    [1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,1,0,1,1,0,0],
+    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1,0,1,0,0,1,1],
+    [1,0,1,1,1,0,1,0,1,0,0,1,1,0,0,1,0,1,0,1,0],
+    [1,0,1,1,1,0,1,0,0,1,0,1,0,1,1,0,1,0,1,0,1],
+    [1,0,0,0,0,0,1,0,1,1,1,0,1,0,0,1,1,0,0,1,0],
+    [1,1,1,1,1,1,1,0,0,0,1,1,0,1,1,0,0,1,1,0,1],
+  ];
+  const cell = size / m.length;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {m.map((row, r) =>
+        row.map((v, c) =>
+          v ? <rect key={`${r}-${c}`} x={c*cell} y={r*cell} width={cell} height={cell} fill="#0D0D0D" rx={cell * 0.12} /> : null
+        )
+      )}
+    </svg>
+  );
+}
+
+/* ── Icon helper ── */
+function Icon({ name, size = 20, color = "#0D0D0D", strokeWidth = 1.8 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && window.lucide) {
+      ref.current.innerHTML = '';
+      const iconFn = window.lucide[name.replace(/-([a-z])/g, (_, l) => l.toUpperCase())];
+      if (iconFn) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', color);
+        svg.setAttribute('stroke-width', strokeWidth);
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.innerHTML = iconFn[2].map(([tag, attrs]) => {
+          const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+          Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k,v));
+          return el.outerHTML;
+        }).join('');
+        ref.current.appendChild(svg);
+      }
+    }
+  }, [name, size, color, strokeWidth]);
+  return <span ref={ref} style={{ display:'inline-flex', alignItems:'center', justifyContent:'center' }}></span>;
+}
+
+/* ══════════════════════════════════
+   SCREEN 1 — MA CARTE
+══════════════════════════════════ */
+function MaCarteScreen() {
+  return (
+    <div style={{ padding: '8px 24px 32px' }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 28 }}>
+        <div>
+          <p style={{ fontSize:13, color:'#A0998F', fontWeight:500, marginBottom:2 }}>Bonjour 👋</p>
+          <h2 style={{ fontSize:24, fontWeight:700, color:'#0D0D0D', letterSpacing:'-0.5px' }}>Sophie</h2>
+        </div>
+        <div style={{
+          width:44, height:44, borderRadius:'50%',
+          background:'linear-gradient(135deg, #FF4F30, #FF8560)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow:'0 4px 12px rgba(255,79,48,0.3)'
+        }}>
+          <span style={{ fontSize:16, fontWeight:700, color:'white' }}>S</span>
+        </div>
+      </div>
+
+      {/* Virtual card */}
+      <div className="wii-card" style={{ marginBottom: 28 }}>
+        {/* Card header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, position:'relative', zIndex:1 }}>
+          <div>
+            <p style={{ fontSize:11, color:'rgba(255,255,255,0.45)', fontWeight:500, letterSpacing:'1.5px', textTransform:'uppercase', marginBottom:4 }}>Carte membre</p>
+            <p style={{ fontSize:20, fontWeight:700, color:'white', letterSpacing:'-0.3px' }}>Wiikard</p>
+          </div>
+          <div style={{
+            background:'#FF4F30', borderRadius:20,
+            padding:'5px 12px',
+            display:'flex', alignItems:'center', gap:5
+          }}>
+            <div style={{ width:6, height:6, borderRadius:'50%', background:'white', animation:'pulse 1.8s infinite' }}></div>
+            <span style={{ fontSize:11, fontWeight:600, color:'white', letterSpacing:'0.3px' }}>Membre Actif</span>
+          </div>
+        </div>
+
+        {/* QR */}
+        <div style={{ display:'flex', justifyContent:'center', marginBottom:20, position:'relative', zIndex:1 }}>
+          <div className="qr-container">
+            <QRCode size={140} />
+          </div>
+        </div>
+
+        {/* Card footer */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', position:'relative', zIndex:1 }}>
+          <div>
+            <p style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontWeight:500, letterSpacing:'1px', textTransform:'uppercase', marginBottom:3 }}>N° Membre</p>
+            <p style={{ fontSize:16, fontWeight:600, color:'white', letterSpacing:'2px', fontVariantNumeric:'tabular-nums' }}>WK-84930</p>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <p style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontWeight:500, letterSpacing:'1px', textTransform:'uppercase', marginBottom:3 }}>Valide jusqu'au</p>
+            <p style={{ fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.8)' }}>12/2026</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:24 }}>
+        {[
+          { label:'Économisés', value:'120,50 €', icon:'TrendingUp', color:'#FF4F30' },
+          { label:'Partenaires', value:'48', icon:'MapPin', color:'#0D0D0D' },
+        ].map(s => (
+          <div key={s.label} style={{
+            background:'white', borderRadius:18, padding:'16px',
+            boxShadow:'0 2px 12px rgba(0,0,0,0.06)'
+          }}>
+            <div style={{
+              width:36, height:36, borderRadius:10,
+              background: s.color === '#FF4F30' ? 'rgba(255,79,48,0.1)' : 'rgba(13,13,13,0.06)',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10
+            }}>
+              <Icon name={s.icon} size={17} color={s.color} strokeWidth={2} />
+            </div>
+            <p style={{ fontSize:19, fontWeight:700, color:'#0D0D0D', letterSpacing:'-0.5px', marginBottom:2 }}>{s.value}</p>
+            <p style={{ fontSize:11, color:'#A0998F', fontWeight:500 }}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Tip */}
+      <div style={{
+        background:'white', borderRadius:16, padding:'14px 16px',
+        display:'flex', alignItems:'center', gap:12,
+        boxShadow:'0 2px 8px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ width:36, height:36, borderRadius:10, background:'rgba(255,79,48,0.1)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Icon name="Zap" size={17} color="#FF4F30" strokeWidth={2.2} />
+        </div>
+        <div>
+          <p style={{ fontSize:12, fontWeight:600, color:'#0D0D0D', marginBottom:2 }}>Présentez votre QR code</p>
+          <p style={{ fontSize:11, color:'#A0998F', lineHeight:1.4 }}>Chez nos partenaires pour bénéficier de vos avantages</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════
+   SCREEN 2 — EXPLORER
+══════════════════════════════════ */
+function ExplorerScreen() {
+  const [activeChip, setActiveChip] = useState('Restos');
+  const chips = ['Restos', 'Sorties', 'Shopping', 'Services', 'Bien-être'];
+
+  const partners = [
+    { name:'Le Bouchon Grenoblois', cat:'Restaurant', dist:'100 m', discount:'15%', rating:'4.8' },
+    { name:'Cinéma Pathé Chavant', cat:'Cinéma', dist:'350 m', discount:'2€/place', rating:'4.5' },
+    { name:'Sports 2000 — Centre', cat:'Shopping', dist:'420 m', discount:'10%', rating:'4.6' },
+    { name:'Café de la Mairie', cat:'Café', dist:'80 m', discount:'1 café offert', rating:'4.9' },
+  ];
+
+  return (
+    <div style={{ padding:'8px 0 32px' }}>
+      {/* Header */}
+      <div style={{ padding:'0 24px', marginBottom:16 }}>
+        <h2 style={{ fontSize:24, fontWeight:700, color:'#0D0D0D', letterSpacing:'-0.5px', marginBottom:4 }}>Explorer</h2>
+        <p style={{ fontSize:13, color:'#A0998F', fontWeight:400 }}>Partenaires à proximité</p>
+      </div>
+
+      {/* Search */}
+      <div style={{ padding:'0 24px', marginBottom:14 }}>
+        <div style={{
+          background:'white', borderRadius:14, padding:'11px 16px',
+          display:'flex', alignItems:'center', gap:10,
+          boxShadow:'0 2px 8px rgba(0,0,0,0.06)'
+        }}>
+          <Icon name="Search" size={16} color="#A0998F" strokeWidth={2} />
+          <span style={{ fontSize:13, color:'#C0B8AF', fontWeight:400 }}>Rechercher un partenaire…</span>
+        </div>
+      </div>
+
+      {/* Chips */}
+      <div style={{
+        display:'flex', gap:8, padding:'0 24px',
+        overflowX:'auto', marginBottom:18,
+        scrollbarWidth:'none'
+      }}>
+        {chips.map(c => (
+          <button key={c} className={`chip ${activeChip===c?'active':'inactive'}`}
+            onClick={() => setActiveChip(c)} style={{ border:'none', cursor:'pointer', fontFamily:'Inter,sans-serif' }}>
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {/* Map */}
+      <div style={{ margin:'0 24px', marginBottom:18 }}>
+        <div className="map-bg" style={{
+          borderRadius:20, height:160,
+          position:'relative', overflow:'hidden',
+          boxShadow:'0 4px 16px rgba(0,0,0,0.1)'
+        }}>
+          {/* Fake streets */}
+          <svg width="100%" height="100%" style={{ position:'absolute', inset:0 }}>
+            <line x1="30%" y1="0" x2="30%" y2="100%" stroke="white" strokeWidth="8" opacity="0.5" />
+            <line x1="65%" y1="0" x2="65%" y2="100%" stroke="white" strokeWidth="5" opacity="0.4" />
+            <line x1="0" y1="40%" x2="100%" y2="40%" stroke="white" strokeWidth="8" opacity="0.5" />
+            <line x1="0" y1="72%" x2="100%" y2="72%" stroke="white" strokeWidth="5" opacity="0.4" />
+          </svg>
+          {/* Pins */}
+          {[
+            { x:'28%', y:'35%' }, { x:'60%', y:'65%' }, { x:'45%', y:'55%' }, { x:'72%', y:'30%' }
+          ].map((p,i) => (
+            <div key={i} style={{
+              position:'absolute', left:p.x, top:p.y,
+              transform:'translate(-50%,-50%)',
+              width:28, height:28, borderRadius:'50%',
+              background: i===0 ? '#FF4F30' : 'white',
+              boxShadow:'0 2px 8px rgba(0,0,0,0.2)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              border: i===0 ? '3px solid white' : '2px solid #E0DDD8'
+            }}>
+              <Icon name="MapPin" size={12} color={i===0?'white':'#0D0D0D'} strokeWidth={2.5} />
+            </div>
+          ))}
+          {/* User dot */}
+          <div style={{
+            position:'absolute', left:'42%', top:'50%',
+            transform:'translate(-50%,-50%)',
+            width:14, height:14, borderRadius:'50%',
+            background:'#3B82F6', border:'2px solid white',
+            boxShadow:'0 0 0 4px rgba(59,130,246,0.2)'
+          }}></div>
+          {/* Overlay pill */}
+          <div style={{
+            position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)',
+            background:'rgba(13,13,13,0.82)', backdropFilter:'blur(8px)',
+            borderRadius:20, padding:'6px 14px',
+            display:'flex', alignItems:'center', gap:6
+          }}>
+            <Icon name="Navigation" size={12} color="white" strokeWidth={2.5} />
+            <span style={{ fontSize:11, color:'white', fontWeight:600 }}>Grenoble Centre</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Partner list */}
+      <div style={{ padding:'0 24px', display:'flex', flexDirection:'column', gap:10 }}>
+        {partners.map((p,i) => (
+          <div key={i} className="partner-card">
+            <div style={{
+              width:44, height:44, borderRadius:12, flexShrink:0,
+              background: i%2===0 ? 'rgba(255,79,48,0.08)' : 'rgba(13,13,13,0.05)',
+              display:'flex', alignItems:'center', justifyContent:'center'
+            }}>
+              <Icon name={['UtensilsCrossed','Clapperboard','ShoppingBag','Coffee'][i]} size={20} color={i%2===0?'#FF4F30':'#6B645C'} strokeWidth={1.8} />
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ fontSize:13, fontWeight:600, color:'#0D0D0D', marginBottom:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</p>
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ fontSize:11, color:'#A0998F' }}>{p.cat}</span>
+                <span style={{ width:3, height:3, borderRadius:'50%', background:'#D0CCC5', display:'inline-block' }}></span>
+                <span style={{ fontSize:11, color:'#A0998F' }}>{p.dist}</span>
+              </div>
+            </div>
+            <div style={{ textAlign:'right', flexShrink:0 }}>
+              <div style={{ background:'rgba(255,79,48,0.1)', borderRadius:8, padding:'3px 8px', marginBottom:3 }}>
+                <span style={{ fontSize:12, fontWeight:700, color:'#FF4F30' }}>-{p.discount}</span>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:2, justifyContent:'flex-end' }}>
+                <Icon name="Star" size={10} color="#F59E0B" strokeWidth={2} />
+                <span style={{ fontSize:10, color:'#A0998F', fontWeight:500 }}>{p.rating}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════
+   SCREEN 3 — ÉCONOMIES
+══════════════════════════════════ */
+function EconomiesScreen() {
+  const history = [
+    { date:'Aujourd\'hui', place:'Café de la Mairie', amount:'1,20 €', icon:'Coffee' },
+    { date:'Hier', place:'Restaurant Le QG', amount:'5,00 €', icon:'UtensilsCrossed' },
+    { date:'Lundi', place:'Sports 2000', amount:'12,30 €', icon:'ShoppingBag' },
+    { date:'Samedi', place:'Cinéma Pathé', amount:'4,00 €', icon:'Clapperboard' },
+    { date:'Vendredi', place:'Le Bouchon Grenoblois', amount:'8,50 €', icon:'UtensilsCrossed' },
+    { date:'Jeudi', place:'SPA Harmonie', amount:'15,00 €', icon:'Sparkles' },
+  ];
+
+  return (
+    <div style={{ padding:'8px 24px 32px' }}>
+      <h2 style={{ fontSize:24, fontWeight:700, color:'#0D0D0D', letterSpacing:'-0.5px', marginBottom:4 }}>Mes Économies</h2>
+      <p style={{ fontSize:13, color:'#A0998F', marginBottom:24 }}>Récapitulatif de l'année</p>
+
+      {/* Big counter */}
+      <div style={{
+        background:'#0D0D0D', borderRadius:24, padding:'32px 24px',
+        textAlign:'center', marginBottom:20, position:'relative', overflow:'hidden'
+      }}>
+        <div style={{
+          position:'absolute', top:-40, right:-40,
+          width:140, height:140, borderRadius:'50%',
+          background:'rgba(255,79,48,0.12)'
+        }}></div>
+        <p style={{ fontSize:12, color:'rgba(255,255,255,0.45)', fontWeight:500, letterSpacing:'1.5px', textTransform:'uppercase', marginBottom:8 }}>Économisés cette année</p>
+        <p className="count-anim" style={{ fontSize:52, fontWeight:800, color:'white', letterSpacing:'-2px', lineHeight:1, marginBottom:8 }}>120,50 €</p>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,79,48,0.2)', borderRadius:20, padding:'4px 12px' }}>
+          <Icon name="TrendingUp" size={12} color="#FF4F30" strokeWidth={2.5} />
+          <span style={{ fontSize:11, color:'#FF4F30', fontWeight:600 }}>+18% vs l'an dernier</span>
+        </div>
+      </div>
+
+      {/* Monthly bar chart */}
+      <div style={{
+        background:'white', borderRadius:20, padding:'20px',
+        marginBottom:20, boxShadow:'0 2px 12px rgba(0,0,0,0.06)'
+      }}>
+        <p style={{ fontSize:13, fontWeight:600, color:'#0D0D0D', marginBottom:16 }}>Par mois</p>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:60 }}>
+          {[22,35,18,42,28,55,38,44,30,48,60,52].map((h,i) => (
+            <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+              <div style={{
+                width:'100%', height: (h/60)*52,
+                borderRadius:4,
+                background: i===9 ? '#FF4F30' : i<9 ? '#0D0D0D' : '#E8E6E0',
+                transition:'height 0.3s'
+              }}></div>
+              {i % 3 === 0 && <span style={{ fontSize:8, color:'#C0B8AF', fontWeight:500 }}>
+                {['J','A','S','O'][Math.floor(i/3)]}
+              </span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* History */}
+      <div style={{ background:'white', borderRadius:20, padding:'4px 16px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
+        <p style={{ fontSize:13, fontWeight:600, color:'#0D0D0D', padding:'14px 0 4px' }}>Historique récent</p>
+        {history.map((h,i) => (
+          <div key={i} className="hist-row">
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{
+                width:38, height:38, borderRadius:10,
+                background:'rgba(13,13,13,0.05)',
+                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
+              }}>
+                <Icon name={h.icon} size={17} color="#6B645C" strokeWidth={1.8} />
+              </div>
+              <div>
+                <p style={{ fontSize:13, fontWeight:500, color:'#0D0D0D', marginBottom:2 }}>{h.place}</p>
+                <p style={{ fontSize:11, color:'#A0998F' }}>{h.date}</p>
+              </div>
+            </div>
+            <span style={{ fontSize:14, fontWeight:700, color:'#FF4F30' }}>+{h.amount}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════
+   SCREEN 4 — PROFIL
+══════════════════════════════════ */
+function ProfilScreen() {
+  const sections = [
+    {
+      title: null,
+      rows: [
+        { icon:'User', label:'Mon Compte', sub:'Sophie Martin', arrow:true },
+        { icon:'CreditCard', label:'Ma Carte', sub:'WK-84930', arrow:true },
+      ]
+    },
+    {
+      title: 'Avantages',
+      rows: [
+        { icon:'Gift', label:'Parrainage', sub:'10€ offerts par filleul', arrow:true, badge:'NEW' },
+        { icon:'Star', label:'Mes favoris', sub:'12 partenaires', arrow:true },
+      ]
+    },
+    {
+      title: 'Support',
+      rows: [
+        { icon:'HelpCircle', label:'Aide & Support', arrow:true },
+        { icon:'FileText', label:'CGU & Confidentialité', arrow:true },
+      ]
+    },
+    {
+      title: null,
+      rows: [
+        { icon:'LogOut', label:'Déconnexion', danger:true },
+      ]
+    },
+  ];
+
+  return (
+    <div style={{ padding:'8px 24px 32px' }}>
+      {/* Profile header */}
+      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:28 }}>
+        <div style={{
+          width:64, height:64, borderRadius:'50%',
+          background:'linear-gradient(135deg, #FF4F30, #FF8560)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow:'0 6px 20px rgba(255,79,48,0.3)'
+        }}>
+          <span style={{ fontSize:24, fontWeight:700, color:'white' }}>S</span>
+        </div>
+        <div>
+          <h2 style={{ fontSize:20, fontWeight:700, color:'#0D0D0D', letterSpacing:'-0.4px' }}>Sophie Martin</h2>
+          <p style={{ fontSize:12, color:'#A0998F', marginTop:2 }}>Membre depuis janvier 2024</p>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:'rgba(255,79,48,0.1)', borderRadius:8, padding:'2px 8px', marginTop:4 }}>
+            <div style={{ width:5, height:5, borderRadius:'50%', background:'#FF4F30' }}></div>
+            <span style={{ fontSize:10, color:'#FF4F30', fontWeight:600 }}>Membre Actif</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Settings groups */}
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {sections.map((sec, si) => (
+          <div key={si}>
+            {sec.title && <p style={{ fontSize:11, fontWeight:600, color:'#A0998F', letterSpacing:'1px', textTransform:'uppercase', marginBottom:6 }}>{sec.title}</p>}
+            <div style={{ background:'white', borderRadius:18, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.05)' }}>
+              {sec.rows.map((row, ri) => (
+                <div key={ri} className="settings-row" style={{
+                  borderBottom: ri < sec.rows.length-1 ? '1px solid #F4F2EE' : 'none'
+                }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                    <div style={{
+                      width:36, height:36, borderRadius:10,
+                      background: row.danger ? 'rgba(239,68,68,0.08)' : 'rgba(13,13,13,0.05)',
+                      display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
+                    }}>
+                      <Icon name={row.icon} size={17} color={row.danger?'#EF4444':'#6B645C'} strokeWidth={1.8} />
+                    </div>
+                    <div>
+                      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                        <span style={{ fontSize:14, fontWeight:500, color: row.danger ? '#EF4444' : '#0D0D0D' }}>{row.label}</span>
+                        {row.badge && (
+                          <span style={{ background:'#FF4F30', color:'white', fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:6, letterSpacing:'0.5px' }}>{row.badge}</span>
+                        )}
+                      </div>
+                      {row.sub && <p style={{ fontSize:11, color:'#A0998F', marginTop:1 }}>{row.sub}</p>}
+                    </div>
+                  </div>
+                  {row.arrow && <Icon name="ChevronRight" size={16} color="#C0B8AF" strokeWidth={2} />}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p style={{ textAlign:'center', fontSize:11, color:'#C0B8AF', marginTop:20 }}>Wiikard v2.4.1 · © 2026</p>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════
+   STATUS BAR ICONS
+══════════════════════════════════ */
+function BatteryIcon() {
+  return (
+    <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+      <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#0D0D0D" strokeOpacity="0.35"/>
+      <rect x="1.5" y="1.5" width="17" height="9" rx="2.5" fill="#0D0D0D"/>
+      <path d="M23 4v4a2 2 0 0 0 0-4z" fill="#0D0D0D" fillOpacity="0.4"/>
+    </svg>
+  );
+}
+
+/* ══════════════════════════════════
+   ROOT APP
+══════════════════════════════════ */
+const TABS = [
+  { id:'explorer', label:'Explorer', icon:'Compass' },
+  { id:'carte',    label:'Ma Carte', icon:'CreditCard' },
+  { id:'economies',label:'Économies', icon:'TrendingUp' },
+  { id:'profil',   label:'Profil',   icon:'User' },
+];
+
+function App() {
+  const [active, setActive] = useState('carte');
+
+  const screens = {
+    carte:     <MaCarteScreen />,
+    explorer:  <ExplorerScreen />,
+    economies: <EconomiesScreen />,
+    profil:    <ProfilScreen />,
+  };
+
+  return (
+    <div className="phone-shell">
+      {/* Status bar */}
+      <div className="status-bar">
+        <span className="status-time">9:41</span>
+        <div className="status-icons">
+          <svg width="17" height="12" viewBox="0 0 17 12" fill="none">
+            <rect x="0" y="3" width="3" height="9" rx="1" fill="#0D0D0D"/>
+            <rect x="4.5" y="2" width="3" height="10" rx="1" fill="#0D0D0D"/>
+            <rect x="9" y="1" width="3" height="11" rx="1" fill="#0D0D0D"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="1" fill="#0D0D0D" fillOpacity="0.2"/>
+          </svg>
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+            <path d="M8 3C10.2 3 12.2 3.9 13.6 5.4L15 4C13.2 2.1 10.7 1 8 1 5.3 1 2.8 2.1 1 4L2.4 5.4C3.8 3.9 5.8 3 8 3Z" fill="#0D0D0D"/>
+            <path d="M8 6C9.4 6 10.6 6.6 11.5 7.5L12.9 6.1C11.6 4.8 9.9 4 8 4 6.1 4 4.4 4.8 3.1 6.1L4.5 7.5C5.4 6.6 6.6 6 8 6Z" fill="#0D0D0D"/>
+            <circle cx="8" cy="10" r="1.5" fill="#0D0D0D"/>
+          </svg>
+          <BatteryIcon />
+        </div>
+      </div>
+
+      {/* Screens */}
+      <div className="screen-area">
+        {TABS.map(t => (
+          <div key={t.id} className={`tab-screen ${active===t.id?'active':''}`}>
+            {screens[t.id]}
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom nav */}
+      <nav className="bottom-nav">
+        {TABS.map(t => (
+          <div key={t.id} className={`nav-item ${active===t.id?'active':''}`} onClick={() => setActive(t.id)}>
+            <div className="nav-icon-wrap">
+              <Icon name={t.icon} size={22}
+                color={active===t.id ? '#FF4F30' : '#A0998F'}
+                strokeWidth={active===t.id ? 2.2 : 1.8}
+              />
+            </div>
+            <span className="nav-label">{t.label}</span>
+          </div>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
